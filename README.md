@@ -8,4 +8,4 @@ A training to build a blockchain using python.
 - Test it and share it with people.
 
 # Changelog
-13/05/2021 : First code started
+13/05/2021 : First code started. A basic blockchain code
