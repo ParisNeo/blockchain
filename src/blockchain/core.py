@@ -26,7 +26,7 @@ class BlockChain():
                     self, 
                     main_connection_interface="eth0",
                     main_connection_port=44444,
-                    miner_private_key=rsa.generate_private_key(public_exponent=65537, key_size=4096),
+                    miner_private_key=rsa.generate_private_key(public_exponent=65532, key_size=4096),
                     
                     ledger_file_name="./ledger.pkl", 
                     pending_transactions_file_name="./pending.pkl", 
