@@ -8,27 +8,37 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 import pickle
 from datetime import datetime
-import web3
+import logging
+import asyncio
+from p2p_python.utils import setup_p2p_params, setup_logger
+from p2p_python.server import Peer2Peer, Peer2PeerCmd
 
 class BlockChain():
     """ Main class
+    Manages the local ledger, synchronizes it with the rest of the network, decides who can mine, receives transactions requests 
     """
     
     def __init__(
                     self, 
-                    miner_private_key=rsa.generate_private_key(key_size=4096), 
+                    main_connection_interface="eth0",
+                    main_connection_port=44444,
+                    miner_private_key=rsa.generate_private_key(public_exponent=65537, key_size=4096),
+                    
                     ledger_file_name="./ledger.pkl", 
                     pending_transactions_file_name="./pending.pkl", 
-                    root_key_store_file="./root_key.pkl" 
+                    root_key_store_file="./root_key.rsa",
+                    root_key_pass_phrase="password"
                 ):
         """Initialises the blockchain object
         Parameters
         ----------
-        miner_public_key (RSAPrivateKey): the miner public key object
-        miner_public_key (RSAPrivateKey): the miner public key object
+        miner_private_key (RSAPrivateKey): the miner private key object
         ledger_file_name  (Path or str): the name of the file containing the ledger
+
         """
         # Save keys in memory
         self.miner_public_key = miner_private_key
@@ -59,30 +69,71 @@ class BlockChain():
 
 
             # save the key very carefully, otherwize it will be lost
-            pickle.dump(private_key, open(root_key_store_file,'wb')) 
+            with open(root_key_store_file,'w') as f:
+                pem = private_key.private_bytes(
+                                                encoding=serialization.Encoding.PEM,
+                                                format=serialization.PrivateFormat.PKCS8,
+                                                encryption_algorithm=serialization.BestAvailableEncryption(bytes(root_key_pass_phrase,"utf8"))
+                                                )
+                f.write(pem.decode("utf8"))
 
             #Build a ledger with a first virtual transaction to the root id
             ts = datetime.now().timestamp()
 
             # Hash the stuff we need to hash
             digest = hashes.Hash(hashes.SHA256())
-            digest.update(bytes(str(ts)+str(public_key)+str(public_key)))
+            str_pc = public_key.public_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PublicFormat.SubjectPublicKeyInfo
+                    )
+            data = bytes(str(ts)+str_pc.decode("utf8")+str_pc.decode("utf8"),"utf8")
+            digest.update(data)
             hash= digest.finalize()
 
             # Build ledger entry
             entry = {
                     "timestamp":ts,
                     "sender":0,# A dump root sender that is used just to create the stuff
-                    "sender_validation":private_key.sign(hash),
-                    "receiver":public_key,
+                    "sender_validation":private_key.sign(
+                                                            hash,
+                                                            padding.PSS(
+                                                                mgf=padding.MGF1(hashes.SHA256()),
+                                                                salt_length=padding.PSS.MAX_LENGTH
+                                                            ),
+                                                            hashes.SHA256()
+                                                        ),
+                    "receiver":public_key.public_bytes(
+                                                            encoding=serialization.Encoding.PEM,
+                                                            format=serialization.PublicFormat.SubjectPublicKeyInfo
+                                                        ),
                     "amount":100000000000, # The maximum amount of coins for this blockchain
                     "Hash":hash,
-                    "Validation":private_key.sign(hash)
+                    "Validation":private_key.sign(hash,
+                                                        padding.PSS(
+                                                            mgf=padding.MGF1(hashes.SHA256()),
+                                                            salt_length=padding.PSS.MAX_LENGTH
+                                                        ),
+                                                        hashes.SHA256()
+                                                    ),
                 }
             self.ledger=[
                 entry
             ]
             pickle.dump(self.ledger,open(str(self.ledger_file_name),"wb"))
+
+        # prepare
+        loop = asyncio.get_event_loop()
+        log = logging.getLogger(__name__)
+        
+        # Build local p2p server to accept connections
+        setup_p2p_params(
+            network_ver=11111,  # (int) identify other network
+            p2p_port=main_connection_port, # (int) P2P listen port
+            p2p_accept=True, # (bool) switch on TCP server
+            p2p_udp_accept=True, # (bool) switch on UDP server
+        )
+        self.p2p = Peer2Peer(listen=100)  # allow 100 connection
+        self.p2p.setup()
         
     def push_transaction(self, ts, sender_key, sender_val, receiver_key, amount):
         # check that the sender has something in its wallet

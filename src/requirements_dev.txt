@@ -1,3 +1,13 @@
-web3>=5.19.0
+pyp2p
 cryptography>=3.4.7
-pickle
+psutil
+umsgpack
+netifaces
+ntplib
+twisted
+ipaddress
+requests
+nose
+setuptools
+pyroute2
+aiomonitor
