@@ -34,9 +34,9 @@ Unit tests are used to
 - Test it and share it with people.
 
 # Changelog
-15/05/2021 : Upgraded blockchain concerpts. Proof of stake scheme chosen
-15/05/2021 : First working Blockchain with basic functionalities
-13/05/2021 : First code started. A basic blockchain code
+- 15/05/2021 : Upgraded blockchain concerpts. Proof of stake scheme chosen
+- 15/05/2021 : First working Blockchain with basic functionalities
+- 13/05/2021 : First code started. A basic blockchain code
 
 # Disclaimer
 
