@@ -135,3 +135,7 @@ nodes.txt
 
 # pem key files
 *.pem
+
+
+# Ledger folder
+ledgers/ledger

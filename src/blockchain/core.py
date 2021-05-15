@@ -65,7 +65,7 @@ class BlockChainNode(object):
                     ntp_server_address = 'europe.pool.ntp.org',
 
                     known_nodes_file_name="nodes.txt",
-                    ledger_dir="./ledger", 
+                    ledger_dir="./ledgers/ledger", 
                     pending_transactions_file_name="./pending.pkl", 
                     root_key_store_file="./root_key.rsa",
                     root_key_pass_phrase="password",
@@ -207,6 +207,7 @@ class BlockChainNode(object):
                     self.build_new_legder()
         # If not, create it (only for new networks)
         else:
+            self.ledger_dir.mkdir(parents=True, exist_ok=True)
             self.build_new_legder()
 
     def build_new_legder(self):
