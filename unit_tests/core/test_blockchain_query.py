@@ -1,6 +1,7 @@
 # Unit test :
 # Author : ParisNeo
-# Description : Builds an instance of BlockChainNone that opens communication port on local and connect to virtually known nodes
+# Description : Builds an instance of BlockChainNone that opens communication port on local and connect to virtually known nodes.
+#               Then, do some quaries to visualize the content of the blockchain 
 from blockchain.core import BlockChainNode
 import argparse
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -13,6 +14,7 @@ args = parser.parse_args()
 
 private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
 public_key = private_key.public_key()
+
 # Test Blockchain object creation with raw data (no miner key given and no )
 bc = BlockChainNode(
                         private_key,
@@ -23,4 +25,4 @@ bc = BlockChainNode(
                         args.port
                     )
 # Start loop
-bc.loop()
+bc.show_ledger()

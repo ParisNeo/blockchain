@@ -132,3 +132,6 @@ dmypy.json
 *.plk
 *.rsa
 nodes.txt
+
+# pem key files
+*.pem
