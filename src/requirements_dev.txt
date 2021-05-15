@@ -1,13 +1,3 @@
-pyp2p
+socket
 cryptography>=3.4.7
-psutil
-umsgpack
-netifaces
-ntplib
-twisted
-ipaddress
-requests
-nose
-setuptools
-pyroute2
-aiomonitor
+json
