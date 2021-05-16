@@ -20,7 +20,10 @@ from _thread import start_new_thread
 import random
 import string 
 import ntplib 
+import traceback, sys
+import base64
 
+# Useful classes ======================================
 class GossipEvents_():
     """List of acceptable events for gossip network
     """
@@ -46,6 +49,29 @@ class GossipEvents_():
         return self._GossipEvents[key]
 
 GossipEvents = GossipEvents_()
+
+class ConnectionRole_():
+    """List of connection roles in the network
+    """
+    def __init__(self):
+        """List of acceptable events for gossip network
+        """
+        self._ConnectionRole={
+            "MASTER":0,
+            "CLIENT":1
+        }
+
+    def __getitem__(self, key):
+        """A function to access the configuration using obj["key"]
+        """
+        return self._ConnectionRole[key]
+
+    def __getattr__(self, key):
+        """A function to access the settings directly using obj.key
+        """
+        return self._ConnectionRole[key]
+
+ConnectionRole = ConnectionRole_()
 
 class BlockChainNode(object):
     """ Main class
@@ -101,12 +127,20 @@ class BlockChainNode(object):
         mining_cap              (float)             : The maximum amount of coins that could be mined (-1 for unlimited coin generation)
         """
         # We first need to be well synced
-        self.time_keeper = ntplib.NTPClient()
-        self.time = self.time_keeper.request(ntp_server_address, version=3)
-        if self.time.offset>10:
-            print("[TIME error] : Your PC is not syced enough with ntp servers. Please sync your clock")
-        print(f"Time offset : {self.time.offset}")
+        try:
+            self.time_keeper = ntplib.NTPClient()
+            self.time = self.time_keeper.request(ntp_server_address, version=3)
+            if self.time.offset>10:
+                print("[TIME error] : Your PC is not syced enough with ntp servers. Please sync your clock")
+            print(f"Time offset : {self.time.offset}")
+        except Exception as ex:
+            print(f"Couldn't contact time server")
 
+        # Not ready yet to interact with the system until I am synced
+        self.ready = False
+
+        # List of blocks to request from the peer
+        self.blocks_to_request=[]
         
         # Save keys in memory
         self.server_nick_name = server_nick_name
@@ -125,12 +159,13 @@ class BlockChainNode(object):
         # Build my identity block
         peer_validation_message = "__BlockChainPeerValidationMessage__"+self.server_nick_name+self.server_address+str(self.server_port)
         signature = self.sign(miner_private_key,bytes(peer_validation_message, "utf8"))
+        signature = base64.b64encode(signature).decode("utf8")
         self.identity = {
             "name" : self.server_nick_name,
             "addr":self.server_address,
             "port":self.server_port,
             "public_key":self.publicKey2Text(miner_public_key),
-            "signature":list(signature)
+            "signature":signature #list(signature)
         }
 
         # Save ledger and pending transaction files
@@ -166,25 +201,23 @@ class BlockChainNode(object):
         self.gossip_list = []
 
         # Build a socket to listen to messages
-        self.server = socket.socket()
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind((server_address, server_port))        # Bind to the port
-        self.print_lock = Lock()
-        start_new_thread(self.listen,())
         # Attempt connection to all known nodes
         for node in self.known_nodes:
             if not(node["addr"]==self.server_address and node["port"]==self.server_port):
-                s = socket.socket()
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 try:
                     s.connect((node["addr"], node["port"]))
                     node["socket"]=s
-                    self.connected_peers.append({"socket":s})
-                    start_new_thread(self.communication, (s,(node["addr"], node["port"])))
-                    self.gossip_hello(s)
-                    self.gossip_get_ledger_infos(s)
+                    self.connected_peers.append({"socket":s, "addr":node["addr"], "port":node["port"]})
+                    start_new_thread(self.communication, (s,(node["addr"], node["port"]),ConnectionRole.CLIENT))
+                    
 
                     print(f"[Main thread] Connected to node {(node['addr'], node['port'])}")
-                except:
+                except Exception as ex:
                     print(f"[Main thread] Node  {(node['addr'], node['port'])} unreachable")
+                    self.log_exception(f"[Exception] {ex}")
 
         # If the pending transaction file exists, then load it
         if self.pending_transactions_file_name.exists():
@@ -192,19 +225,18 @@ class BlockChainNode(object):
         else:
             self.pending_transactions = []
 
+        # Start server
+        start_new_thread(self.listen,())
         # ==============================================
         # Data loading either from a backup file, if the network is completely off or from a peer who is alife
         # ==============================================
 
         # If the ledger file exists, load it and carry on
-        if self.ledger_dir.exists():
+        if len(self.connected_peers)==0: # I am the only one !!
             bad_block = self.check_ledger_integrity()
             # if we managed to connect to some nodes, we can ask about the current status of the blockchain
-            if len(self.connected_peers)>0:
-                self.gossip_getCurrentLedger_infos(self.connected_peers[0]["socket"])
-            else:# Otherwize we have to build our own network (first run ever)
-                if bad_block==0:
-                    self.build_new_legder()
+            if bad_block==0:
+                self.build_new_legder()
         # If not, create it (only for new networks)
         else:
             self.ledger_dir.mkdir(parents=True, exist_ok=True)
@@ -239,7 +271,7 @@ class BlockChainNode(object):
                     "Transactions":self.pending_transactions,
                     "prev":prev,
                     "hash":hash,
-                    "Validation":self.sign(self.miner_private_key, data)
+                    "Validation":self.sign(self.miner_private_key, data).decode('latin-1')
                 }
             # Save the block
             pickle.dump(block, open(self.ledger_dir/str(id),"wb"))
@@ -274,55 +306,115 @@ class BlockChainNode(object):
         return ran
 
     # ======================= Federated P2P Communication code =========================== 
-    def communication(self, c, full_addr):
+    def communication(self, c, full_addr, role):
         """TCP connection with the peer to talk to
         """
         try:
+            # Say hello
+            self.gossip_hello(c)
+            #If I am a client, then ask for ledger information
+            if role==ConnectionRole.CLIENT:
+                self.gossip_getCurrentLedger_infos(c)
+            # Now get to work
             while True:
                 data = c.recv(4096*1000).decode("utf8")
-                print(len(data))
-                data = json.loads(data)
-                data["infected_nodes"].append(self.identity["public_key"]) # Add me to the list of those who knows about this node
-                self.gossip_list.append(data)
+                data_len = len(data)
+                print(f"Received {data_len} bytes")
+                if data_len>0:
+                    data = json.loads(data)
+                    data["infected_nodes"].append(self.identity["public_key"]) # Add me to the list of those who knows about this node
+                    self.gossip_list.append(data)
 
-                # Parse received data
-                if data["type"]==GossipEvents.HELLO: # Hello message received
-                    if self.get_peer_index(full_addr[0], full_addr[1])==-1: # this is a new person
-                        # Someone said hello, let's start by verifying that he is a legitimate user. Remember, this is a trustless system
-                        if self.verifyPeerInfos(data['metadata']):
-                            print(f"[com {full_addr}] Adding peer \n{data['metadata']['public_key']}")
-                            # Contaminate all nodes in the network
-                            for peer in self.connected_peers:
-                                peer["socket"].connection.send(
+                    # Parse received data
+                    if data["type"]==GossipEvents.HELLO: # Hello message received
+                        index = self.get_peer_index(full_addr[0], full_addr[1])
+                        infos = self.connected_peers[index]
+                        if not "private_key" in infos.keys(): # this is a new person we don't know his private key yet, so let's say hello
+                            # Someone said hello, let's start by verifying that he is a legitimate user. Remember, this is a trustless system
+                            if self.verifyPeerInfos(data['metadata']):
+                                print(f"[com {full_addr}] Adding peer \n{data['metadata']['public_key']}")
+                                # Contaminate all nodes in the network
+                                for peer in self.connected_peers:
+                                    if peer["socket"]!=c:
+                                        peer["socket"].send(
+                                            json.dumps(
+                                            self.buildGossipFrame(
+                                                GossipEvents.HELLO,
+                                                data["metadata"]
+                                            )
+                                            ).encode("utf8")
+                                        )
+                                data["metadata"]["socket"]=c
+                                self.connected_peers[index] = data["metadata"]
+                            else:# bad peer!!
+                                print(f"[Peer {full_addr} is bad!!] Refusing peer {full_addr}")
+                                self.close_connection(c)
+                                return
+                    elif data["type"]==GossipEvents.GET_LEDGER_INFOS:
+                        print(f"[Gossip packet] Received legder infos request from {full_addr}")
+                        blocks_list = sorted([int(str(b.stem)) for b in self.ledger_dir.iterdir() if str(b.stem).isnumeric()])
+                        c.send(
+                                json.dumps(
+                                self.buildGossipFrame(
+                                    GossipEvents.LEDGER_INFOS,
+                                    blocks_list[-1]
+                                )
+                                ).encode("utf8")
+                            )
+                            
+                        print(f"[Gossip packet] Sent ledger ingfos to {full_addr}")
+                    elif data["type"]==GossipEvents.LEDGER_INFOS:
+                        print(f"Ledger infos {data['metadata']}")
+                        blocks_list = [int(str(b.stem)) for b in self.ledger_dir.iterdir() if str(b.stem).isnumeric()]
+                        local_ledger_blocks = sorted(blocks_list)
+                        remote_ledger_last_block = data['metadata']
+                        if len(local_ledger_blocks)==0: # I have no ledger or what so ever
+                            self.blocks_to_request= range(remote_ledger_last_block)
+                        else:
+                            if remote_ledger_last_block==0:# I am better than him got a longer chain
+                                #TODO :notify that we have a longer chain
+                                pass
+                            else:
+                                # Prepare to ask for all those blocks
+                                self.blocks_to_request = range(local_ledger_blocks[-1],remote_ledger_last_block)
+                                pass
+
+                        if len(self.blocks_to_request)>0:
+                            # Request a ledger block
+                            print(f"[Gossip request] Requesting block {self.blocks_to_request[0]}")
+                            c.send(
                                     json.dumps(
                                     self.buildGossipFrame(
-                                        GossipEvents.HELLO,
-                                        self.identity
+                                        GossipEvents.GET_LEDGER_BLOCK,
+                                        self.blocks_to_request[0]
                                     )
                                     ).encode("utf8")
                                 )
-                    self.connected_peers.append(data["metadata"])
-                elif data["type"]==GossipEvents.GET_LEDGER_INFOS:
-                    c.connection.send(
-                                    json.dumps(
-                                    self.buildGossipFrame(
-                                        GossipEvents.LEDGER_INFOS,
-                                        [int(str(b)) for b in self.ledger_dir.iterdir()]
-                                    )
-                                    ).encode("utf8")
-                                )
-                elif data["type"]==GossipEvents.LEDGER_INFOS:
-                    print(f"Ledger infos {data['metadata']}")
-                    local_ledger_blocks = sorted([int(str(b)) for b in self.ledger_dir.iterdir()])
-                    remote_ledger_blocks = sorted(json.loads(data['metadata']))
-                    # Find the tip of the ledger and ask for all new blocks
-
+                        else:
+                            print(f"[Notification] Ready to process")
+                            self.ready=True
+                        # Find the tip of the ledger and ask for all new blocks
+                    elif data["type"]==GossipEvents.LEDGER_INFOS:
+                        # Tofdo ,send the requested ledger block
+                        pass
+                        
 
         except Exception as ex:
-            c.close()
             print(f"[com {full_addr}] Connection lost")
+            self.log_exception(f"{ex}")
+            self.close_connection(c)
             time.sleep(1)
 
+    def close_connection(self, socket):
+        socket.close()
+        found=None
+        for i,peer in enumerate(self.connected_peers):
+            if peer["socket"]==socket:
+                found=i
+                break
+        if found is not None:
+            print("Peer removed from list")
+            del self.connected_peers[found]     
 
     def listen(self):
         """Listen to peer connections
@@ -337,13 +429,10 @@ class BlockChainNode(object):
             # establish connection with client
             c, addr = self.server.accept()
     
-            # lock acquired by client
-            self.print_lock.acquire()
             print(f'Connected to :{addr[0]}:{addr[1]}')
+            self.connected_peers.append({"socket":c, "addr":addr[0], "port":addr[1]})
             # Start a new thread and return its identifier
-            start_new_thread(self.communication, (c,addr))
-            # Say hello
-            self.gossip_hello(c)
+            start_new_thread(self.communication, (c,addr,ConnectionRole.MASTER))
     
         s.close()
 
@@ -380,14 +469,21 @@ class BlockChainNode(object):
             ).encode("utf8")
         )
     def gossip_getCurrentLedger_infos(self, connection):
-       connection.send(
-            json.dumps(
-            self.buildGossipFrame(
-                GossipEvents.GET_LEDGER_INFOS,
-                ""
-            )
-            ).encode("utf8")
-        )        
+        """Request current ledger informations (last bloc id)
+        """
+        try:
+            connection.send(
+                    json.dumps(
+                    self.buildGossipFrame(
+                        GossipEvents.GET_LEDGER_INFOS,
+                        ""
+                    )
+                    ).encode("utf8")
+                )        
+            return True
+        except Exception as ex:
+            self.log_exception(ex)
+            return False
 
     def gossip_peer_is_connected(self, peer_infos):
         self.buildGossipFrame(
@@ -467,12 +563,13 @@ class BlockChainNode(object):
     def text2PrivateKey(self, text):
         """Convert a text to a private key
         """
-        return serialization.load_pem_private_key("-----BEGIN PRIVATE KEY-----"+text+"-----END PRIVATE KEY-----")
+        return serialization.load_pem_private_key(bytes("-----BEGIN PRIVATE KEY-----\n"+text+"\n-----END PRIVATE KEY-----","utf8"))
 
-    def text2PrivateKey(self, text):
+    def text2PublicKey(self, text):
         """Convert a text to a key
         """
-        return serialization.load_pem_public_key("-----BEGIN PUBLIC KEY-----"+text+"-----END PUBLIC KEY-----")
+        txt_bytes = bytes("-----BEGIN PUBLIC KEY-----\n"+text+"\n-----END PUBLIC KEY-----","utf8")
+        return serialization.load_pem_public_key(txt_bytes)
 
 
     # ================= cryptography helpers ======================================
@@ -535,9 +632,9 @@ class BlockChainNode(object):
     def verifyPeerInfos(self, metadata):
         """ Ferify that the peer is not a fraudulent one
         """
-        public_key = self.text2PrivateKey(metadata["public_key"])
-        peer_validation_message = "__BlockChainPeerValidationMessage__"+metadata["name"]+metadata["addr"]+str(metadata["port"])
-        return self.verify(public_key, peer_validation_message, metadata["signature"])
+        public_key = self.text2PublicKey(metadata["public_key"])
+        peer_validation_message = bytes("__BlockChainPeerValidationMessage__"+metadata["name"]+metadata["addr"]+str(metadata["port"]),"utf8")
+        return self.verify(public_key, peer_validation_message, base64.b64decode(metadata["signature"]))
 
     # ================= Ledger queries ======================================
     def show_ledger(self):
@@ -619,3 +716,12 @@ class BlockChainNode(object):
                 }
             # Add it to the ledger
             self.ledger.append(entry)
+
+    # ========================================================        
+    # Logging
+    # ========================================================        
+    def log_exception(self, ex):
+        """Logs an exception
+        """
+        type_, value_, traceback_ = sys.exc_info()
+        print("[Exception]  {}\n{}\n{}\n{}\n".format(ex,type_,value_,'\n'.join(traceback.format_tb(traceback_))))
