@@ -34,6 +34,7 @@ Unit tests are used to
 - Test it and share it with people.
 
 # Changelog
+- 19/05/2021 : Added first data modules for a big reorganization of the software
 - 17/05/2021 : Added first handshake code
 - 15/05/2021 : Upgraded blockchain concerpts. Proof of stake scheme chosen
 - 15/05/2021 : First working Blockchain with basic functionalities
