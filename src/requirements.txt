@@ -2,3 +2,4 @@ socket
 cryptography>=3.4.7
 json
 ntplib
+base58
