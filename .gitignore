@@ -129,7 +129,7 @@ dmypy.json
 .pyre/
 
 #Keys and ledgers
-*.plk
+*.pkl
 *.rsa
 nodes.txt
 
