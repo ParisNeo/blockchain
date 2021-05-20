@@ -10,12 +10,12 @@ from blockchain.crypto_tools import hash, sign, generateKeys, b58encode, b58deco
 
 class Output():
     def __init__(self, public_key, amount):
-        self.public_key = public_key
+        self.public_key = publicKey2Text(public_key)
         self.amount = amount
     
     def __str__(self) -> str:
         return "\n".join([
-            f"public key => {publicKey2Text(self.public_key)}",
+            f"public key => {self.public_key}",
             f"amount => {self.amount}"
         ])
 

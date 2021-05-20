@@ -1,11 +1,8 @@
 """
 """
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+from Crypto.PublicKey import RSA
+from Crypto.Hash import SHA256
+from Crypto.Signature import PKCS1_v1_5
 from base58 import b58encode, b58decode
 
 
@@ -14,31 +11,27 @@ def hash(data):
     """Hash some data
     """
     # Hash the stuff we need to hash
-    digest = hashes.Hash(hashes.SHA256())
+    digest = SHA256.new()
     digest.update(data)
-    hash= digest.finalize()
+    hash= digest.hexdigest()
     return hash
 
 def generateKeys():
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=512)
+    private_key = RSA.generate(1024)
     public_key = private_key.public_key()
     return private_key, public_key
 
-def sign(private_key, message):
+def sign(private_key:RSA.RsaKey, message):
     """Sign a message
     Parameters
     ----------
     private_key (RSAPublicKey)   : The private key to sign the message with
     message     (str)            : The message to be signed
     """
-    return private_key.sign(
-        message,
-        padding.PSS(
-            mgf=padding.MGF1(hashes.SHA256()),
-            salt_length=padding.PSS.MAX_LENGTH
-        ),
-        hashes.SHA256()
-    )      
+    hasher = SHA256.new(message)
+    signer = PKCS1_v1_5.new(private_key)
+    signature = signer.sign(hasher)
+    return signature
 
 def verify(public_key, message, signature):
     """Verify the message signature
@@ -48,48 +41,30 @@ def verify(public_key, message, signature):
     message    (str)            : The signed message (used for verification)
     signature  (str)            : The signature
     """
-    try:
-        public_key.verify(
-            signature,
-            message,
-            padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
-                ),
-                hashes.SHA256()
-            )  
-        return True
-    except InvalidSignature as inv_signature:
-        return False
+    hasher = SHA256.new(message)
+    verifier = PKCS1_v1_5.new(public_key)
+    return verifier.verify(hasher, signature)
 
 
 
-def privateKey2Text(key):
+def privateKey2Text(key:RSA.RsaKey):
     """Converts a private key to text
     """
-    return "".join(key.private_bytes(
-                                encoding=serialization.Encoding.PEM,
-                                format=serialization.PrivateFormat.PKCS8,
-                                encryption_algorithm=serialization.NoEncryption()
-                            ).decode("utf8")[len("-----BEGIN PRIVATE KEY-----")+1:-len("-----END PRIVATE KEY-----")-2].split("\n"))
+    return b58encode(key.exportKey('DER'))
 
-def publicKey2Text(key):
+def publicKey2Text(key:RSA.RsaKey):
     """Converts a public key to text
     """
-    return "".join(key.public_bytes(
-                                encoding=serialization.Encoding.PEM,
-                                format=serialization.PublicFormat.SubjectPublicKeyInfo
-                            ).decode("utf8")[len("-----BEGIN PUBLIC KEY-----")+1:-len("-----END PUBLIC KEY-----")-2].split("\n"))
+    return b58encode(key.exportKey('DER'))
 
 
-def text2PrivateKey(text):
+def text2PrivateKey(text:str):
     """Convert a text to a private key
     """
-    return serialization.load_pem_private_key(bytes("-----BEGIN PRIVATE KEY-----\n"+text+"\n-----END PRIVATE KEY-----","utf8"))
+    return RSA.importKey(b58decode(text))
 
-def text2PublicKey(text):
+def text2PublicKey(text:str):
     """Convert a text to a key
     """
-    txt_bytes = bytes("-----BEGIN PUBLIC KEY-----\n"+text+"\n-----END PUBLIC KEY-----","utf8")
-    return serialization.load_pem_public_key(txt_bytes)
+    return RSA.importKey(b58decode(text))
 

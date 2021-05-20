@@ -5,7 +5,7 @@ from blockchain.crypto_tools import hash, sign, generateKeys, b58encode, b58deco
 
 class Transaction():
     def __init__(self, id = 0, timestamp = time.time(), inputs=[], outputs=[], signature=bytes([1] * 256)):
-        self.id = id,
+        self.id = id
         self.timestamp = timestamp
         self.inputs = inputs
         self.outputs = outputs
@@ -21,6 +21,8 @@ class Transaction():
         data = bytes(str(self.id) + str(self.timestamp)+ "\n".join([str(i.serialize()) for i in self.inputs])+ "\n".join([str(o.serialize()) for o in self.outputs]), "utf8")
         return verify(miner_public_key, data, self.signature)
 
+    def serialize(self):
+        return bytes(str(self.id) + str(self.timestamp)+ "\n".join([str(i.serialize()) for i in self.inputs])+ "\n".join([str(o.serialize()) for o in self.outputs]), "utf8")
 
     def __str__(self) -> str:
         return str(self.id)+str(self.timestamp)+str(self.inputs)+str(self.outputs)+str(self.signature)
