@@ -1,5 +1,5 @@
 socket
-cryptography>=3.4.7
+crypto
 json
 ntplib
 base58
