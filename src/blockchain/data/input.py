@@ -9,6 +9,8 @@ from blockchain.crypto_tools import hash, sign, generateKeys, b58encode, b58deco
 
 class Input():
     def __init__(self, private_key, public_key, amount):
+        """ Build a signed input
+        """
         self.public_key = publicKey2Text(public_key)
         self.amount = amount
         data = bytes(str(self.public_key)+str(amount),"utf8")
