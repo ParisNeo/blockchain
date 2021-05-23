@@ -1,3 +1,10 @@
+"""
+File   : transaction.py
+Author : ParisNeo
+Description :
+    Main class for a many to many coin transfert transaction
+    Smart contracts are codes that inherit from this class and should implement the sign and verify 
+"""
 import pickle
 import time
 
@@ -9,12 +16,12 @@ class Transaction():
         self.timestamp = timestamp
         self.inputs = inputs
         self.outputs = outputs
-        data = bytes(str(self.id) + str(self.timestamp)+ "\n".join([str(i.serialize()) for i in self.inputs])+ "\n".join([str(o.serialize()) for o in self.outputs]), "utf8")
+        data = self.serialize()
         self.hash = hash(data)
         self.signature = signature
 
     def sign(self, private_key):
-        data = bytes(str(self.id) + str(self.timestamp)+ "\n".join([str(i.serialize()) for i in self.inputs])+ "\n".join([str(o.serialize()) for o in self.outputs]), "utf8")
+        data = self.serialize()
         self.signature = sign(private_key, data)
 
     def verify(self, miner_public_key):

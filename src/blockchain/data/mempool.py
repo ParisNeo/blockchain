@@ -1,8 +1,8 @@
 """
-File   : block.py
+File   : mempool.py
 Author : ParisNeo
 Description :
-    The block chain is a chain of blocks. Here is a class that describes a single block in our block chain
+    Here are stored the pending transactions
 """
 import pickle
 import time

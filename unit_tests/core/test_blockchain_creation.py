@@ -1,7 +1,7 @@
 # Unit test :
 # Author : ParisNeo
 # Description : Builds an instance of BlockChainNone that opens communication port on local and connect to virtually known nodes
-from blockchain.core import BlockChainNode
+from blockchain import BlockChainNode
 import argparse
 from blockchain.crypto_tools import generateKeys
 
