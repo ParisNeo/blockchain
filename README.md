@@ -138,7 +138,9 @@ Smart contracts can be halted by the forger if he deems it very power hungry giv
 
 
 # UTXO vs Regular accounts
-Bitcoin uses UTXO principle to define how people can spend money. The idea is that you have an unspent money that you can spend in a transaction then once sepent you can't spend it anymore. So if you want to pay someone, you have to look at all unspent transactions that you possess then create a transaction for which one or multiple UTXO inputs are used, the outputs will be 
+Bitcoin uses UTXO principle to define how people can spend money. The idea is that you have an unspent money that you can spend in a transaction then once sepent you can't spend it anymore. So if you want to pay someone, you have to look at all unspent transactions that you possess then create a transaction for which one or multiple UTXO inputs are used, the outputs will be in general the receiver, the fees to the miner and a change that comes back to one of the sender's wallets.
+
+In our case, we'll use a much simpler scheme based on actual single wallet address with a balance that increases when it receives money and decreases when it sends money.
 
 
 # Objective
