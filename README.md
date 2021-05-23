@@ -116,6 +116,30 @@ We decided to go with a herarchical distributed network.
 
 A herarchical network is a network with main nodes that communicate between themselves and have access to the ledger full copy and temporary peer nodes that can connect to the network. In our case, any peer is considered a node if it makes a full copy of the legder. Otherwize, he can only push transactions to the network to be mined. Every body can read the ledger and provide a web based interface to show any transaction. 
 
+# Smart contracts
+Complex crypto assets managements can be managed through smart contracts. Smart contracts are codes that are executed in the network by the miners that we're gonna be calling forgers (we don't use PoW). The contract should be executed using gas which in the case of Etherium is a unit that can be changed to ether in order to pay the execution of the smart contract.
+
+In our case, we'll be using transaction fee as the equivalent to gaz (keep it simple). The smart contract is executed by the forger that should provide a signature to the work he did. A contract is created using a custom transaction, that puts it into the blockchain. Then, the contract can be executed by users as many times as they want as long as the contract allows it.
+
+
+This enable huge possibilities ranging from multiple persons payements to single or multiple persons ir irganization to a will that someone can put in the blockchain so that when he dies, money goes to some defined accounts.
+
+We can build non fungible tokens using those smart contracts that can be used inside games for example to give advantage to the owner knowing that the token is unique and can't be copied but can be given to someone for free or for a sum of coins.
+
+We can create smart contracts to sell space, land, real objects, art assets ... The possibilities are endless.
+
+Cron transactions are transactions that schedule future transactions to be executed at some point. This can be cool to regularly pay someone automatically. the blockchain takes care of it. No need to build the code. This can be halted either by a fixed number of payements or by a signal from the owner that deactivate the payment for example if the payed person is fired. 
+
+Some smart contracts can be trigged by the absence of regular triggering. Like verifying that the owner is still alive.
+
+Here we define a custom transaction as a transaction that inherits from Transaction object but performs other operations instead of a regular acount to acount transaction. The transaction is pushed to the network and given an address that people can call with parameters, pay the defined fee, and get a result.
+
+Smart contracts can be halted by the forger if he deems it very power hungry given the payed fee. The forger may define how much money should he get for executing the contract. This may cause some contracts to be starved if no forger wants to take them in. if a smart contract is starved for a long time, it will simply be considered unwanted and will be thrown away. The fees get lost so be careful not to put very consuming code in the blockchain.
+
+
+# UTXO vs Regular accounts
+Bitcoin uses UTXO principle to define how people can spend money. The idea is that you have an unspent money that you can spend in a transaction then once sepent you can't spend it anymore. So if you want to pay someone, you have to look at all unspent transactions that you possess then create a transaction for which one or multiple UTXO inputs are used, the outputs will be 
+
 
 # Objective
 
@@ -149,7 +173,7 @@ You may code :
 - Documentation
 
 # Sponsorship
-The project is free and made on free time. No sponsoring is requested. No donations are requested. Developers are not payed to build this code. It is a hobby project that help understand this technology and imaging a new ways to better utilize it. It is a challenging project that can potentially be good for our society.
+The project is free and made on free time. No sponsoring is requested. No donations are requested. Developers are not payed to build this code. It is a hobby project that help understand this technology and imagining new ways to better utilize it. It is a challenging project that can potentially be good for our society.
 
 
 # Changelog
